@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="다각형 테트리스">
+<meta name="theme-color" content="#16224a">
+<title>다각형 테트리스 · 4학년 2학기 단원 정리</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overscroll-behavior: none; }
+  html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+  body {
+    height: 100vh; height: 100dvh; overflow: hidden;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: radial-gradient(circle at 20% 10%, #3a56a8, #16224a 70%);
+    color: #222;
+    /* 길게 누를 때 글자 선택·메뉴가 뜨지 않게 */
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  }
+  button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+  .wrap { display: flex; gap: 16px; width: 100%; height: 100%; max-width: 1100px; margin: 0 auto; }
+
+  /* 문제 패널 */
+  .panel {
+    flex: 1; min-width: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: #fff; border-radius: 22px; padding: 20px 22px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.3);
+    display: flex; flex-direction: column;
+  }
+  .tag {
+    align-self: flex-start; background: #eaf0ff; color: #3456c8;
+    font-weight: bold; padding: 6px 14px; border-radius: 999px; font-size: .95rem;
+  }
+  .qnum { color: #999; font-weight: bold; margin-top: 10px; }
+  .qtext { font-size: 1.45rem; font-weight: bold; line-height: 1.5; margin: 6px 0 10px; word-break: keep-all; }
+  .qtext.small { font-size: 1.1rem; color: #555; }
+  .shape { display: flex; justify-content: center; margin: 2px 0 10px; }
+  .shape svg { width: 220px; max-width: 70%; max-height: 22vh; height: auto; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: auto; }
+  .choice {
+    font-size: 1.25rem; font-weight: bold; color: #222;
+    padding: 18px 10px; min-height: 64px; border-radius: 16px; border: 3px solid #d6e0ff;
+    background: #f6f8ff; cursor: pointer; word-break: keep-all;
+    transition: transform .08s, background .15s;
+  }
+  @media (hover: hover) { .choice:hover { background: #e6edff; } }
+  .choice:active { transform: scale(.96); background: #dbe5ff; }
+  .choice .num { color: #7d93d8; margin-right: 6px; }
+  .result { font-size: 2rem; font-weight: bold; margin: 6px 0 10px; }
+  .result.good { color: #1f9e55; } .result.bad { color: #e04848; }
+  .answer { font-size: 1.3rem; margin: 6px 0 10px; }
+  .answer b { color: #1f9e55; }
+  .explain {
+    background: #fff8e1; border-left: 6px solid #ffb400; border-radius: 12px;
+    padding: 14px 16px; font-size: 1.1rem; line-height: 1.6; word-break: keep-all;
+  }
+  .mission {
+    margin-top: auto; background: #eaf0ff; border-radius: 16px; padding: 16px;
+    font-size: 1.15rem; line-height: 1.75; text-align: center; font-weight: bold; color: #2c47a8;
+    animation: pulse 1.2s ease-in-out infinite; word-break: keep-all;
+  }
+  @keyframes pulse { 50% { transform: scale(1.03); } }
+  .note { color: #888; margin: 12px 0 0; }
+  .next-btn {
+    margin-top: auto; font-size: 1.3rem; font-weight: bold;
+    padding: 18px; border: none; border-radius: 16px; background: #4a7dff; color: #fff; cursor: pointer;
+  }
+  .keys { color: #aaa; font-size: .85rem; margin-top: 12px; text-align: center; }
+  @media (pointer: coarse) { .keys { display: none; } }
+
+  /* 게임 판 영역 */
+  .side { display: grid; gap: 12px; min-height: 0; min-width: 0; }
+  .hud { grid-area: hud; background: rgba(255,255,255,.12); color: #fff; border-radius: 16px; padding: 12px 14px; font-weight: bold; }
+  .hud-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 1.05rem; }
+  .hud-btns { display: flex; gap: 10px; }
+  .icon-btn { background: none; border: none; font-size: 1.35rem; cursor: pointer; padding: 0; color: #fff; }
+  .prog { height: 14px; background: rgba(255,255,255,.2); border-radius: 7px; margin-top: 8px; overflow: hidden; }
+  .prog-fill { height: 100%; width: 0; background: linear-gradient(90deg, #ffd84a, #ff8a3d); transition: width .5s; }
+  .board-wrap { grid-area: board; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  canvas {
+    display: block; border-radius: 14px; background: #0e1630;
+    box-shadow: inset 0 0 0 3px #4a5fa8, 0 10px 24px rgba(0,0,0,.35);
+    touch-action: none; /* 판 위에서 손가락으로 밀어도 화면이 움직이지 않게 */
+  }
+  .ctrls { grid-area: ctrls; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ctrls button {
+    font-size: 1.7rem; padding: 14px 0; min-height: 60px; border-radius: 16px; border: none; cursor: pointer;
+    background: #ffd84a; box-shadow: 0 5px 0 #c99d10; color: #222;
+  }
+  .ctrls button:active, .ctrls button.pressed { transform: translateY(4px); box-shadow: 0 1px 0 #c99d10; }
+  .ctrls button:disabled { opacity: .3; cursor: default; transform: none; }
+  .ctrls .drop { background: #ff8a3d; box-shadow: 0 5px 0 #c45c18; }
+  .ctrls .drop:active, .ctrls .drop.pressed { box-shadow: 0 1px 0 #c45c18; }
+
+  /* 가로 화면 (패드 가로, PC): 왼쪽 문제 · 오른쪽 게임판 */
+  @media (orientation: landscape) {
+    .wrap { flex-direction: row; }
+    .side {
+      width: clamp(260px, 36vw, 380px); flex-shrink: 0;
+      grid-template-areas: "hud" "board" "ctrls";
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+  }
+  /* 세로 화면 (패드 세로): 위 문제 · 아래 게임판 + 오른쪽 큰 버튼 */
+  @media (orientation: portrait) {
+    .wrap { flex-direction: column; }
+    .panel { flex: 0 0 auto; height: 47%; padding: 16px 18px; }
+    .qtext { font-size: 1.3rem; }
+    .shape svg { max-height: 15vh; }
+    .side {
+      flex: 1; grid-template-columns: minmax(0, 1fr) clamp(130px, 24vw, 200px);
+      grid-template-rows: auto minmax(0, 1fr);
+      grid-template-areas: "board hud" "board ctrls";
+    }
+    .hud { font-size: .95rem; }
+    .hud-row { flex-wrap: wrap; }
+    .ctrls { grid-template-columns: 1fr 1fr; align-self: end; }
+    .ctrls button { min-height: 76px; font-size: 2rem; }
+  }
+
+  /* 시작·결과 화면 */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10,16,40,.75);
+    display: none; align-items: center; justify-content: center; z-index: 10; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .ov-card {
+    background: #fff; border-radius: 26px; padding: 28px 26px; max-width: 520px; width: 100%;
+    max-height: 100%; overflow-y: auto;
+    text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.4); animation: pop .35s ease-out;
+  }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+  .ov-card h1 { margin: 0 0 6px; font-size: 2rem; }
+  .ov-card .sub { color: #3456c8; font-weight: bold; margin-bottom: 14px; }
+  .rules { text-align: left; background: #f4f7ff; border-radius: 16px; padding: 14px 18px; line-height: 1.9; font-size: 1.05rem; word-break: keep-all; }
+  .big-btn {
+    margin-top: 18px; width: 100%; font-size: 1.4rem; font-weight: bold;
+    padding: 18px; border: none; border-radius: 18px; background: #ff8a3d; color: #fff; cursor: pointer;
+    box-shadow: 0 5px 0 #c45c18;
+  }
+  .big-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #c45c18; }
+  .sub-btn {
+    margin-top: 10px; width: 100%; font-size: 1.05rem; font-weight: bold;
+    padding: 12px; border: 2px solid #c9d6ff; border-radius: 14px; background: #fff; color: #3456c8; cursor: pointer;
+  }
+  .stats { font-size: 1.2rem; line-height: 1.9; margin-top: 10px; }
+  .stats b { color: #ff8a3d; font-size: 1.4rem; }
+
+  .confetti { position: fixed; top: -30px; font-size: 1.6rem; z-index: 20; pointer-events: none; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(115vh) rotate(720deg); } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="panel" id="panel"></div>
+
+  <div class="side">
+    <div class="hud">
+      <div class="hud-row">
+        <span>✅ 맞힌 문제 <span id="correct">0</span>개</span>
+        <span class="hud-btns">
+          <button class="icon-btn" id="fsBtn" title="전체 화면">⛶</button>
+          <button class="icon-btn" id="soundBtn" title="소리 켜기/끄기">🔊</button>
+        </span>
+      </div>
+      <div class="hud-row" style="margin-top:6px">
+        <span>💥 깬 줄</span><span id="lines">0 / 5</span>
+      </div>
+      <div class="prog"><div class="prog-fill" id="prog"></div></div>
+    </div>
+    <div class="board-wrap" id="boardWrap"><canvas id="board"></canvas></div>
+    <div class="ctrls">
+      <button id="btnLeft"  title="왼쪽으로">◀</button>
+      <button id="btnRot"   title="돌리기">↻</button>
+      <button id="btnRight" title="오른쪽으로">▶</button>
+      <button id="btnDrop"  class="drop" title="바로 떨어뜨리기">⤓</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="ov-card" id="ovCard"></div></div>
+
+<script>
+/* =========================================================
+   ⚙️ 선생님 설정: 여기 숫자만 바꾸면 돼요
+   ========================================================= */
+const LINES_TO_WIN = 5;    // 몇 줄을 깨면 단원 정리 완료인지
+const FALL_MS      = 1000; // 블록이 한 칸 내려오는 시간(밀리초). 클수록 느려요
+const COLS = 8, ROWS = 12; // 게임 판 크기(가로, 세로)
+
+/* =========================================================
+   도형 그림 만들기
+   ========================================================= */
+function regularPts(n, cx = 100, cy = 85, r = 70) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (Math.PI * 2 * i) / n;
+    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  return pts;
+}
+function polySVG(pts, opt = {}) {
+  const fill = opt.fill || "#cfe0ff";
+  let s = `<svg viewBox="0 0 200 170" xmlns="http://www.w3.org/2000/svg">`;
+  s += `<polygon points="${pts.map(p => p.join(",")).join(" ")}" fill="${fill}" stroke="#2c47a8" stroke-width="4" stroke-linejoin="round"/>`;
+  if (opt.diag) {
+    const n = pts.length;
+    for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      s += `<line x1="${pts[i][0]}" y1="${pts[i][1]}" x2="${pts[j][0]}" y2="${pts[j][1]}" stroke="#e04848" stroke-width="3" stroke-dasharray="7 5"/>`;
+    }
+  }
+  pts.forEach(p => s += `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="#2c47a8"/>`);
+  return `<div class="shape">${s}</svg></div>`;
+}
+const PENTA = [[40,130],[25,65],[95,20],[175,55],[155,140]];
+const HEXA  = [[22,85],[58,25],[135,18],[180,75],[145,150],[60,148]];
+
+/* =========================================================
+   📚 문제 목록: 4학년 2학기 「다각형」
+   문제를 고치거나 추가하려면 같은 모양으로 한 줄씩 쓰면 돼요.
+   topic: 주제 / q: 문제 / choices: 보기 / answer: 정답(보기와 똑같이) / explain: 풀이
+   ========================================================= */
+const TOPICS = ["다각형", "정다각형", "대각선", "모양 만들기·채우기"];
+const QUESTIONS = [
+  // ── 다각형 ──
+  { topic: "다각형", q: "선분으로만 둘러싸인 도형을 무엇이라고 할까요?",
+    choices: ["다각형", "원", "대각선", "꼭짓점"], answer: "다각형",
+    explain: "선분으로만 둘러싸인 도형을 <b>다각형</b>이라고 해요." },
+  { topic: "다각형", q: "다음 중 다각형이 <u>아닌</u> 것은?",
+    choices: ["삼각형", "오각형", "원", "팔각형"], answer: "원",
+    explain: "원은 굽은 선(곡선)으로 둘러싸여 있어서 다각형이 아니에요." },
+  { topic: "다각형", q: "이 도형의 이름은 무엇일까요?", svg: polySVG(PENTA),
+    choices: ["사각형", "오각형", "육각형", "칠각형"], answer: "오각형",
+    explain: "변이 5개인 다각형은 <b>오각형</b>이에요. 변의 수를 세어 보세요!" },
+  { topic: "다각형", q: "이 도형의 이름은 무엇일까요?", svg: polySVG(HEXA, { fill: "#ffe3c2" }),
+    choices: ["오각형", "육각형", "칠각형", "팔각형"], answer: "육각형",
+    explain: "변이 6개인 다각형은 <b>육각형</b>이에요." },
+  { topic: "다각형", q: "변이 8개인 다각형의 이름은 무엇일까요?",
+    choices: ["육각형", "칠각형", "팔각형", "구각형"], answer: "팔각형",
+    explain: "다각형은 변의 수에 따라 이름이 정해져요. 변이 8개면 <b>팔각형</b>!" },
+  { topic: "다각형", q: "칠각형의 꼭짓점은 몇 개일까요?",
+    choices: ["5개", "6개", "7개", "8개"], answer: "7개",
+    explain: "다각형은 <b>변의 수와 꼭짓점의 수가 같아요.</b> 칠각형은 변 7개, 꼭짓점 7개!" },
+
+  // ── 정다각형 ──
+  { topic: "정다각형", q: "변의 길이가 모두 같고, 각의 크기가 모두 같은 다각형을 무엇이라고 할까요?",
+    choices: ["정다각형", "직사각형", "평행사변형", "사다리꼴"], answer: "정다각형",
+    explain: "변의 길이가 모두 같고 각의 크기가 모두 같은 다각형을 <b>정다각형</b>이라고 해요." },
+  { topic: "정다각형", q: "다음 중 정다각형인 것은?",
+    choices: ["직사각형", "마름모", "정사각형", "평행사변형"], answer: "정사각형",
+    explain: "직사각형은 변의 길이가, 마름모는 각의 크기가 모두 같지 않을 수 있어요. <b>정사각형</b>은 둘 다 같아요." },
+  { topic: "정다각형", q: "이 정다각형의 이름은 무엇일까요?", svg: polySVG(regularPts(6), { fill: "#d6f5dd" }),
+    choices: ["정오각형", "정육각형", "정칠각형", "정팔각형"], answer: "정육각형",
+    explain: "변이 6개이고 변의 길이와 각의 크기가 모두 같으니 <b>정육각형</b>이에요." },
+  { topic: "정다각형", q: "한 변이 5cm인 정육각형의 모든 변의 길이의 합은 몇 cm일까요?",
+    choices: ["25cm", "30cm", "35cm", "36cm"], answer: "30cm",
+    explain: "정육각형은 변 6개의 길이가 모두 같아요. 5 × 6 = <b>30(cm)</b>" },
+  { topic: "정다각형", q: "모든 변의 길이의 합이 40cm인 정팔각형이 있어요. 한 변의 길이는 몇 cm일까요?",
+    choices: ["4cm", "5cm", "8cm", "10cm"], answer: "5cm",
+    explain: "정팔각형은 변 8개의 길이가 모두 같아요. 40 ÷ 8 = <b>5(cm)</b>" },
+  { topic: "정다각형", q: "정삼각형의 한 각의 크기는 몇 도일까요?",
+    choices: ["45°", "60°", "90°", "120°"], answer: "60°",
+    explain: "삼각형의 세 각의 합은 180°예요. 세 각이 모두 같으니 180 ÷ 3 = <b>60°</b>" },
+  { topic: "정다각형", q: "정오각형의 한 각은 108°예요. 정오각형의 모든 각의 크기의 합은 몇 도일까요?",
+    choices: ["360°", "432°", "540°", "600°"], answer: "540°",
+    explain: "정오각형은 다섯 각의 크기가 모두 같아요. 108 × 5 = <b>540°</b>" },
+  { topic: "정다각형", q: "“마름모는 항상 정다각형이다.” 맞을까요, 틀릴까요?", fixed: true,
+    choices: ["⭕ 맞아요", "❌ 틀려요"], answer: "❌ 틀려요",
+    explain: "마름모는 네 변의 길이는 같지만, <b>네 각의 크기가 모두 같지는 않을 수 있어서</b> 정다각형이 아니에요." },
+
+  // ── 대각선 ──
+  { topic: "대각선", q: "다각형에서 서로 이웃하지 않는 두 꼭짓점을 이은 선분을 무엇이라고 할까요?",
+    choices: ["변", "대각선", "꼭짓점", "높이"], answer: "대각선",
+    explain: "서로 이웃하지 않는 두 꼭짓점을 이은 선분을 <b>대각선</b>이라고 해요." },
+  { topic: "대각선", q: "삼각형에는 대각선이 몇 개 있을까요?",
+    choices: ["0개", "1개", "2개", "3개"], answer: "0개",
+    explain: "삼각형은 세 꼭짓점이 모두 서로 이웃해 있어서 <b>대각선을 그을 수 없어요.</b>" },
+  { topic: "대각선", q: "사각형에는 대각선이 몇 개 있을까요?",
+    choices: ["1개", "2개", "3개", "4개"], answer: "2개",
+    explain: "사각형은 마주 보는 꼭짓점끼리 이으면 대각선이 <b>2개</b>예요." },
+  { topic: "대각선", q: "빨간 점선이 오각형의 대각선이에요. 대각선은 모두 몇 개일까요?",
+    svg: polySVG(regularPts(5), { diag: true }),
+    choices: ["3개", "4개", "5개", "6개"], answer: "5개",
+    explain: "한 꼭짓점에서 대각선을 2개씩 그을 수 있어요. 5 × 2 = 10인데 두 번씩 셌으니 10 ÷ 2 = <b>5개</b>" },
+  { topic: "대각선", q: "육각형에는 대각선이 모두 몇 개 있을까요?",
+    choices: ["6개", "8개", "9개", "12개"], answer: "9개",
+    explain: "한 꼭짓점에서 대각선을 3개씩 그을 수 있어요. 6 × 3 = 18, 두 번씩 셌으니 18 ÷ 2 = <b>9개</b>" },
+  { topic: "대각선", q: "두 대각선의 길이가 같고, 서로 수직으로 만나는 사각형은 무엇일까요?",
+    choices: ["직사각형", "마름모", "정사각형", "평행사변형"], answer: "정사각형",
+    explain: "직사각형은 길이만 같고, 마름모는 수직으로만 만나요. 두 가지를 모두 가진 것은 <b>정사각형</b>!" },
+  { topic: "대각선", q: "직사각형의 두 대각선에 대한 설명으로 옳은 것은?",
+    choices: ["길이가 서로 같다", "항상 수직으로 만난다", "대각선이 없다", "대각선이 3개다"], answer: "길이가 서로 같다",
+    explain: "직사각형의 두 대각선은 <b>길이가 같고</b>, 한 대각선이 다른 대각선을 반으로 나눠요." },
+  { topic: "대각선", q: "마름모의 두 대각선은 어떻게 만날까요?",
+    choices: ["수직으로 만난다", "만나지 않는다", "서로 평행하다", "길이가 항상 같다"], answer: "수직으로 만난다",
+    explain: "마름모의 두 대각선은 <b>서로 수직으로 만나고</b>, 서로를 반으로 나눠요." },
+
+  // ── 모양 만들기·채우기 ──
+  { topic: "모양 만들기·채우기", q: "정삼각형 모양 조각 2개를 겹치지 않게 변끼리 이어 붙이면 어떤 사각형이 될까요?",
+    choices: ["정사각형", "마름모", "직사각형", "사다리꼴"], answer: "마름모",
+    explain: "정삼각형 2개를 붙이면 네 변의 길이가 모두 같은 <b>마름모</b>가 돼요." },
+  { topic: "모양 만들기·채우기", q: "한 변의 길이가 같은 정삼각형 조각으로 이 정육각형을 빈틈없이 채우려면 몇 개가 필요할까요?",
+    svg: polySVG(regularPts(6), { fill: "#ffe3c2" }),
+    choices: ["3개", "4개", "6개", "8개"], answer: "6개",
+    explain: "정육각형의 가운데에서 꼭짓점으로 선을 그으면 정삼각형 <b>6개</b>로 나뉘어요." },
+  { topic: "모양 만들기·채우기", q: "정삼각형 3개로 만든 사다리꼴 조각이 있어요. 이 조각 몇 개로 정육각형 하나를 채울 수 있을까요?",
+    choices: ["2개", "3개", "4개", "6개"], answer: "2개",
+    explain: "정육각형은 정삼각형 6개와 같아요. 사다리꼴 조각은 정삼각형 3개니까 <b>2개</b>면 돼요." },
+  { topic: "모양 만들기·채우기", q: "한 가지 정다각형만 사용해서 평면을 빈틈없이 채울 수 있는 것은?",
+    choices: ["정오각형", "정육각형", "정칠각형", "정팔각형"], answer: "정육각형",
+    explain: "정육각형의 한 각은 120°예요. 3개가 한 점에 모이면 120 × 3 = 360°라서 <b>빈틈없이</b> 채워져요. (벌집 모양!)" },
+];
+
+/* =========================================================
+   소리 (아이패드는 무음 스위치가 켜져 있으면 소리가 안 나요)
+   ========================================================= */
+let audioCtx = null, soundOn = true;
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) {}
+}
+function beep(freq, dur = .12, type = "sine", when = 0, vol = .15) {
+  if (!soundOn || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime + when;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const SFX = {
+  correct() { beep(660, .1, "triangle"); beep(880, .18, "triangle", .1); },
+  wrong()   { beep(220, .3, "sawtooth", 0, .07); },
+  move()    { beep(420, .03, "square", 0, .03); },
+  land()    { beep(130, .1, "square", 0, .08); },
+  clear()   { [523, 659, 784, 1047].forEach((f, i) => beep(f, .18, "triangle", i * .07)); },
+  pop()     { beep(300 + Math.random() * 500, .07, "square", 0, .04); },
+  win()     { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => beep(f, .22, "triangle", i * .13)); },
+};
+function vibrate(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+/* =========================================================
+   테트리스 블록
+   ========================================================= */
+const PIECES = {
+  I: { shape: [[1,1,1,1]],           color: "#3ed0ff" },
+  O: { shape: [[1,1],[1,1]],         color: "#ffd84a" },
+  T: { shape: [[0,1,0],[1,1,1]],     color: "#b06cff" },
+  S: { shape: [[0,1,1],[1,1,0]],     color: "#4ee06a" },
+  Z: { shape: [[1,1,0],[0,1,1]],     color: "#ff5a5a" },
+  J: { shape: [[1,0,0],[1,1,1]],     color: "#4a7dff" },
+  L: { shape: [[0,0,1],[1,1,1]],     color: "#ff9a3d" },
+};
+const CELL = 40;
+const LW = COLS * CELL, LH = ROWS * CELL; // 게임 판의 논리 크기
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const boardWrap = document.getElementById("boardWrap");
+
+/* 화면 크기에 맞춰 판 크기 자동 조절 (선명하게) */
+function fitCanvas() {
+  const w = boardWrap.clientWidth, h = boardWrap.clientHeight;
+  if (!w || !h) return;
+  const cell = Math.max(10, Math.floor(Math.min(w / COLS, h / ROWS)));
+  const cssW = cell * COLS, cssH = cell * ROWS;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.style.width = cssW + "px";
+  canvas.style.height = cssH + "px";
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  const s = canvas.width / LW;
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+}
+if (window.ResizeObserver) new ResizeObserver(fitCanvas).observe(boardWrap);
+window.addEventListener("resize", fitCanvas);
+window.addEventListener("orientationchange", () => setTimeout(fitCanvas, 300));
+
+let board, cur, bag, state, lines, correctCnt, tries, queue, curQ, curChoices, fallTimer;
+let particles = [], texts = [], flashRows = [];
+
+function shuffle(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function emptyBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(0)); }
+function nextType() { if (!bag.length) bag = shuffle(Object.keys(PIECES)); return bag.pop(); }
+
+function collide(shape, px, py) {
+  for (let r = 0; r < shape.length; r++)
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const x = px + c, y = py + r;
+      if (x < 0 || x >= COLS || y >= ROWS) return true;
+      if (y >= 0 && board[y][x]) return true;
+    }
+  return false;
+}
+function rotated(m) { return m[0].map((_, i) => m.map(row => row[i]).reverse()); }
+function ghostY() { let y = cur.y; while (!collide(cur.shape, cur.x, y + 1)) y++; return y; }
+
+function spawn() {
+  const t = nextType();
+  cur = { shape: PIECES[t].shape.map(r => r.slice()), color: PIECES[t].color, x: 0, y: 0 };
+  cur.x = Math.floor((COLS - cur.shape[0].length) / 2);
+  if (collide(cur.shape, cur.x, cur.y)) { cur = null; gameOver(); return; }
+  state = "piece"; setCtrls(true);
+  clearInterval(fallTimer);
+  fallTimer = setInterval(() => { if (state === "piece") softDrop(); }, FALL_MS);
+}
+function move(dx) {
+  if (state !== "piece") return false;
+  if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; SFX.move(); return true; }
+  return false;
+}
+function rotate() {
+  if (state !== "piece") return;
+  const ns = rotated(cur.shape);
+  for (const dx of [0, -1, 1, -2, 2]) {
+    if (!collide(ns, cur.x + dx, cur.y)) { cur.shape = ns; cur.x += dx; SFX.move(); return; }
+  }
+}
+function softDrop() {
+  if (state !== "piece") return;
+  if (!collide(cur.shape, cur.x, cur.y + 1)) cur.y++;
+  else lockPiece();
+}
+function hardDrop() {
+  if (state !== "piece") return;
+  cur.y = ghostY();
+  lockPiece();
+}
+
+function lockPiece() {
+  clearInterval(fallTimer);
+  setCtrls(false);
+  let overTop = false;
+  cur.shape.forEach((row, r) => row.forEach((v, c) => {
+    if (!v) return;
+    const y = cur.y + r;
+    if (y < 0) overTop = true; else board[y][cur.x + c] = cur.color;
+  }));
+  cur = null;
+  SFX.land(); vibrate(15);
+  if (overTop) { gameOver(); return; }
+
+  const full = [];
+  for (let r = 0; r < ROWS; r++) if (board[r].every(c => c)) full.push(r);
+
+  if (!full.length) { nextQuestion(); return; }
+
+  // 💥 줄 깨기
+  state = "clearing";
+  flashRows = full;
+  SFX.clear(); vibrate([30, 40, 30]);
+  full.forEach(r => board[r].forEach((color, c) => burst(c, r, color, 10)));
+  texts.push({ t: full.length > 1 ? `펑! ${full.length}줄!` : "펑!", x: LW / 2, y: full[0] * CELL + 20, life: 1 });
+  setTimeout(() => {
+    board = board.filter((_, i) => !full.includes(i));
+    while (board.length < ROWS) board.unshift(Array(COLS).fill(0));
+    flashRows = [];
+    lines += full.length;
+    updateHud();
+    if (lines >= LINES_TO_WIN) winSequence();
+    else nextQuestion();
+  }, 450);
+}
+
+function burst(c, r, color, n = 8) {
+  for (let k = 0; k < n; k++) {
+    particles.push({
+      x: c * CELL + CELL / 2, y: r * CELL + CELL / 2,
+      vx: (Math.random() - .5) * 9, vy: -Math.random() * 8 - 1,
+      life: 1, color, size: 4 + Math.random() * 7,
+    });
+  }
+}
+
+/* =========================================================
+   그리기
+   ========================================================= */
+function drawCell(x, y, color, alpha = 1) {
+  const px = x * CELL, py = y * CELL;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.fillRect(px + 2, py + 2, CELL - 4, CELL - 4);
+  ctx.fillStyle = "rgba(255,255,255,.4)";
+  ctx.fillRect(px + 2, py + 2, CELL - 4, 6);
+  ctx.fillStyle = "rgba(0,0,0,.22)";
+  ctx.fillRect(px + 2, py + CELL - 8, CELL - 4, 6);
+  ctx.globalAlpha = 1;
+}
+function draw(now) {
+  ctx.clearRect(0, 0, LW, LH);
+  ctx.strokeStyle = "rgba(255,255,255,.06)";
+  ctx.lineWidth = 1;
+  for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, LH); ctx.stroke(); }
+  for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(LW, r * CELL); ctx.stroke(); }
+
+  board.forEach((row, r) => row.forEach((color, c) => { if (color) drawCell(c, r, color); }));
+
+  if (cur && state === "piece") {
+    const gy = ghostY();
+    ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = cur.color;
+    cur.shape.forEach((row, r) => row.forEach((v, c) => {
+      if (v && gy + r >= 0) ctx.strokeRect((cur.x + c) * CELL + 4, (gy + r) * CELL + 4, CELL - 8, CELL - 8);
+    }));
+    ctx.setLineDash([]);
+    cur.shape.forEach((row, r) => row.forEach((v, c) => { if (v && cur.y + r >= 0) drawCell(cur.x + c, cur.y + r, cur.color); }));
+  }
+
+  flashRows.forEach(r => {
+    ctx.fillStyle = `rgba(255,255,255,${.5 + .5 * Math.sin(now / 40)})`;
+    ctx.fillRect(0, r * CELL, LW, CELL);
+  });
+
+  particles.forEach(p => {
+    ctx.globalAlpha = Math.max(p.life, 0);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+
+  texts.forEach(t => {
+    ctx.globalAlpha = Math.max(t.life, 0);
+    ctx.font = "bold 44px sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 6; ctx.strokeStyle = "#16224a";
+    ctx.strokeText(t.t, t.x, t.y);
+    ctx.fillStyle = "#ffd84a";
+    ctx.fillText(t.t, t.x, t.y);
+  });
+  ctx.globalAlpha = 1;
+}
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(50, now - last) / 16.67; last = now;
+  particles.forEach(p => { p.vy += .4 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= .022 * dt; });
+  particles = particles.filter(p => p.life > 0);
+  texts.forEach(t => { t.y -= .8 * dt; t.life -= .015 * dt; });
+  texts = texts.filter(t => t.life > 0);
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================
+   문제 진행
+   ========================================================= */
+const panel = document.getElementById("panel");
+const IS_TOUCH = window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
+
+function buildQueue() {
+  // 네 주제가 골고루 섞이도록 번갈아 냅니다.
+  const groups = TOPICS.map(t => shuffle(QUESTIONS.filter(q => q.topic === t)));
+  const out = [];
+  while (groups.some(g => g.length)) groups.forEach(g => { if (g.length) out.push(g.shift()); });
+  return out;
+}
+
+function nextQuestion() {
+  if (!queue.length) queue = buildQueue();
+  curQ = queue.shift();
+  curChoices = curQ.fixed ? curQ.choices.slice() : shuffle(curQ.choices);
+  state = "question";
+  panel.innerHTML = `
+    <div class="tag">📐 ${curQ.topic}</div>
+    <div class="qnum">문제 ${tries + 1}</div>
+    <div class="qtext">${curQ.q}</div>
+    ${curQ.svg || ""}
+    <div class="choices">
+      ${curChoices.map((c, i) => `<button class="choice" data-i="${i}"><span class="num">${i + 1}</span>${c}</button>`).join("")}
+    </div>
+    <div class="keys">⌨️ 숫자키 1~${curChoices.length}로도 고를 수 있어요</div>`;
+  panel.scrollTop = 0;
+}
+
+function choose(i) {
+  if (state !== "question") return;
+  const picked = curChoices[i];
+  tries++;
+  if (picked === curQ.answer) {
+    correctCnt++; updateHud(); SFX.correct();
+    const how = IS_TOUCH
+      ? "👆 게임판을 손가락으로 <u>밀면</u> 블록이 따라와요<br>👆 <u>톡</u> 치면 돌아가요 · <u>아래로 쓱</u> 내리면 쿵!"
+      : "◀ ▶ 로 옮기고 ↻ 로 돌려서<br>⤓ 로 쿵! 떨어뜨리세요";
+    panel.innerHTML = `
+      <div class="result good">⭕ 정답이에요!</div>
+      <div class="explain">💡 ${curQ.explain}</div>
+      <div class="mission">🧱 블록을 받았어요!<br>${how}</div>
+      <div class="keys">⌨️ ← → 이동 · ↑ 돌리기 · ↓ 한 칸 · 스페이스 바로 떨어뜨리기</div>`;
+    spawn();
+  } else {
+    SFX.wrong(); vibrate(80);
+    state = "wrong";
+    queue.splice(Math.min(3, queue.length), 0, curQ); // 틀린 문제는 조금 뒤에 다시
+    panel.innerHTML = `
+      <div class="result bad">❌ 아쉬워요!</div>
+      <div class="qtext small">${curQ.q}</div>
+      <div class="answer">정답: <b>${curQ.answer}</b></div>
+      <div class="explain">💡 ${curQ.explain}</div>
+      <p class="note">🔁 이 문제는 조금 뒤에 다시 나와요. 블록은 맞혀야 받을 수 있어요!</p>
+      <button class="next-btn" id="nextBtn">다음 문제 ▶</button>`;
+  }
+  panel.scrollTop = 0;
+}
+
+panel.addEventListener("click", e => {
+  const ch = e.target.closest(".choice");
+  if (ch) { choose(Number(ch.dataset.i)); return; }
+  if (e.target.closest("#nextBtn")) nextQuestion();
+});
+
+/* =========================================================
+   점수판 · 버튼 · 터치 · 키보드
+   ========================================================= */
+function updateHud() {
+  document.getElementById("correct").textContent = correctCnt;
+  document.getElementById("lines").textContent = `${Math.min(lines, LINES_TO_WIN)} / ${LINES_TO_WIN}`;
+  document.getElementById("prog").style.width = Math.min(100, lines / LINES_TO_WIN * 100) + "%";
+}
+const ctrlBtns = ["btnLeft", "btnRot", "btnRight", "btnDrop"].map(id => document.getElementById(id));
+function setCtrls(on) { ctrlBtns.forEach(b => { b.disabled = !on; if (!on) b.classList.remove("pressed"); }); }
+
+/* 버튼: 누르는 즉시 반응, ◀ ▶ 는 꾹 누르면 계속 이동 */
+function holdBtn(id, fn, repeat) {
+  const b = document.getElementById(id);
+  let t1 = null, t2 = null;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; b.classList.remove("pressed"); };
+  b.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (b.disabled) return;
+    b.classList.add("pressed");
+    fn();
+    if (repeat) t1 = setTimeout(() => { t2 = setInterval(() => { if (state === "piece") fn(); else stop(); }, 90); }, 260);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, stop));
+}
+holdBtn("btnLeft",  () => move(-1), true);
+holdBtn("btnRight", () => move(1),  true);
+holdBtn("btnRot",   rotate);
+holdBtn("btnDrop",  hardDrop);
+
+/* 게임판 터치: 좌우로 밀기 = 이동, 톡 = 돌리기, 아래로 쓸기 = 떨어뜨리기 */
+let gest = null;
+canvas.addEventListener("pointerdown", e => {
+  if (state !== "piece") return;
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  gest = { id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, t: performance.now(), moved: false };
+});
+canvas.addEventListener("pointermove", e => {
+  if (!gest || e.pointerId !== gest.id || state !== "piece") return;
+  const step = canvas.clientWidth / COLS * .9;
+  let dx = e.clientX - gest.lx;
+  while (dx >= step)  { move(1);  gest.lx += step; dx -= step; gest.moved = true; }
+  while (dx <= -step) { move(-1); gest.lx -= step; dx += step; gest.moved = true; }
+});
+function endGesture(e) {
+  if (!gest || e.pointerId !== gest.id) return;
+  const g = gest; gest = null;
+  if (state !== "piece") return;
+  const cell = canvas.clientWidth / COLS;
+  const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+  const dt = performance.now() - g.t;
+  if (dy > cell * 1.5 && dy > Math.abs(dx) * 1.2) hardDrop();
+  else if (!g.moved && Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 350) rotate();
+}
+canvas.addEventListener("pointerup", endGesture);
+canvas.addEventListener("pointercancel", () => { gest = null; });
+
+/* 길게 누를 때 뜨는 메뉴 막기 */
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+/* 소리 · 전체 화면 버튼 */
+document.getElementById("soundBtn").addEventListener("click", e => {
+  soundOn = !soundOn; e.currentTarget.textContent = soundOn ? "🔊" : "🔇";
+  if (soundOn) unlockAudio();
+});
+const fsBtn = document.getElementById("fsBtn");
+const rootEl = document.documentElement;
+const canFS = !!(rootEl.requestFullscreen || rootEl.webkitRequestFullscreen);
+if (!canFS) fsBtn.style.display = "none";
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      const p = (rootEl.requestFullscreen || rootEl.webkitRequestFullscreen).call(rootEl);
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (e) {}
+}
+fsBtn.addEventListener("click", toggleFullscreen);
+
+/* 키보드 (PC) */
+document.addEventListener("keydown", e => {
+  if (state === "question" && /^[1-9]$/.test(e.key)) {
+    const i = Number(e.key) - 1;
+    if (i < curChoices.length) choose(i);
+    return;
+  }
+  if (state === "wrong" && e.key === "Enter") { e.preventDefault(); nextQuestion(); return; }
+  if (state !== "piece") return;
+  const k = e.key;
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(k)) return;
+  e.preventDefault();
+  if (k === "ArrowLeft") move(-1);
+  else if (k === "ArrowRight") move(1);
+  else if (k === "ArrowUp") rotate();
+  else if (k === "ArrowDown") softDrop();
+  else hardDrop();
+});
+
+/* =========================================================
+   시작 · 성공 · 실패 화면
+   ========================================================= */
+const overlay = document.getElementById("overlay");
+const ovCard = document.getElementById("ovCard");
+function showOverlay(html) { ovCard.innerHTML = html; overlay.classList.add("show"); }
+function hideOverlay() { overlay.classList.remove("show"); }
+
+function showStart() {
+  const ctrlRule = IS_TOUCH
+    ? "👆 게임판을 <b>밀면 이동</b>, <b>톡 치면 회전</b>, <b>아래로 쓸면 쿵!</b><br>　 (아래 노란 버튼으로도 할 수 있어요)"
+    : "🧱 ◀ ▶ 로 옮기고, ↻ 로 돌리고, ⤓ 로 떨어뜨려요";
+  showOverlay(`
+    <h1>🧩 다각형 테트리스</h1>
+    <div class="sub">4학년 2학기 · 다각형 단원 정리</div>
+    <div class="rules">
+      ✅ 문제를 맞히면 <b>블록</b>을 하나 받아요<br>
+      ${ctrlRule}<br>
+      💥 가로 한 줄이 꽉 차면 <b>펑!</b> 하고 깨져요<br>
+      🏆 <b>${LINES_TO_WIN}줄</b>을 깨면 단원 정리 완료!<br>
+      🔁 틀린 문제는 조금 뒤에 다시 나와요
+    </div>
+    <button class="big-btn" id="startBtn">시작하기 ▶</button>
+    ${canFS ? '<button class="sub-btn" id="fsStartBtn">⛶ 전체 화면으로 시작하기</button>' : ""}`);
+  document.getElementById("startBtn").onclick = startGame;
+  const f = document.getElementById("fsStartBtn");
+  if (f) f.onclick = () => { toggleFullscreen(); startGame(); };
+}
+
+function startGame() {
+  unlockAudio(); // 패드는 버튼을 눌러야 소리가 켜져요
+  board = emptyBoard(); bag = []; cur = null;
+  lines = 0; correctCnt = 0; tries = 0;
+  particles = []; texts = []; flashRows = [];
+  queue = buildQueue();
+  clearInterval(fallTimer);
+  setCtrls(false); updateHud(); hideOverlay();
+  nextQuestion();
+  setTimeout(fitCanvas, 50);
+}
+
+function gameOver() {
+  state = "over"; clearInterval(fallTimer); setCtrls(false);
+  SFX.wrong(); vibrate(200);
+  showOverlay(`
+    <h1>😅 꼭대기까지 쌓였어요!</h1>
+    <div class="stats">맞힌 문제 <b>${correctCnt}</b>개 · 깬 줄 <b>${lines}</b>줄</div>
+    <p>빈칸이 생기지 않게 블록을 잘 돌려서 놓아 보세요!</p>
+    <button class="big-btn" id="againBtn">다시 도전 🔁</button>`);
+  document.getElementById("againBtn").onclick = startGame;
+}
+
+function winSequence() {
+  // 남은 블록이 아래에서부터 와르르 깨지는 연출
+  state = "won"; setCtrls(false);
+  panel.innerHTML = `<div class="result good" style="margin:auto;text-align:center">🎉 ${LINES_TO_WIN}줄 달성!<br>블록을 모두 깨는 중...</div>`;
+  let r = ROWS - 1;
+  const iv = setInterval(() => {
+    if (r < 0) { clearInterval(iv); showWin(); return; }
+    let any = false;
+    for (let c = 0; c < COLS; c++) if (board[r][c]) { burst(c, r, board[r][c], 7); board[r][c] = 0; any = true; }
+    if (any) { SFX.pop(); vibrate(10); }
+    r--;
+  }, 90);
+}
+
+function showWin() {
+  SFX.win(); confetti();
+  const rate = tries ? Math.round(correctCnt / tries * 100) : 0;
+  showOverlay(`
+    <h1>🏆 단원 정리 완료!</h1>
+    <div class="sub">다각형 마스터가 되었어요!</div>
+    <div class="stats">
+      푼 문제 <b>${tries}</b>개 · 맞힌 문제 <b>${correctCnt}</b>개<br>
+      정답률 <b>${rate}%</b>
+    </div>
+    <button class="big-btn" id="againBtn">한 번 더 하기 🔁</button>`);
+  document.getElementById("againBtn").onclick = startGame;
+}
+
+function confetti() {
+  const items = ["🎉", "⭐", "🔺", "🟦", "🔶", "🟨", "✨", "🔷"];
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement("span");
+    s.className = "confetti";
+    s.textContent = items[i % items.length];
+    s.style.left = Math.random() * 100 + "vw";
+    s.style.animationDuration = 2.5 + Math.random() * 2.5 + "s";
+    s.style.animationDelay = Math.random() * 1.2 + "s";
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 6500);
+  }
+}
+
+/* 처음 실행 */
+board = emptyBoard(); bag = []; lines = 0; correctCnt = 0; tries = 0; state = "idle";
+setCtrls(false); updateHud();
+panel.innerHTML = `<div class="qtext" style="margin:auto;text-align:center;color:#aaa">시작 버튼을 눌러 주세요 🙂</div>`;
+fitCanvas();
+showStart();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
